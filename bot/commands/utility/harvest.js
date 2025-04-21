@@ -27,7 +27,7 @@ module.exports = {
     const timeDiff = currentTime - cropStartTime; // Time difference in milliseconds
 
     // Assume it takes 1 hour for a crop to grow (adjust as needed)
-    const growthTime = 1000 * 60 * 60; // 1 hour in milliseconds
+    const growthTime = 1000 * 30; // 30 seconds 
 
     if (timeDiff < growthTime) {
       // If the crop hasn't grown yet
