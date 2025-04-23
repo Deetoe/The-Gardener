@@ -1,26 +1,43 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import FarmOverview from './components/FarmOverview';
-import CropDetails from './components/CropDetails';
-import BusinessList from './components/BusinessList';
+import React, { createContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import LandingPage from './components/landingPage';
+import SignIn from './components/SignIn';
+import Dashboard from './components/Dashboard';
+import AuthSuccess from './components/AuthSuccess';
+import Registration from './components/Registration';
+import './App.css';
 
-function App() {
+// Create API context for global access
+export const ApiContext = createContext();
+
+const App = () => {
+  // API URL from environment variables
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return localStorage.getItem('authToken') && localStorage.getItem('discordId');
+  };
+
+  // Protected route component
+  const ProtectedRoute = ({ element }) => {
+    return isAuthenticated() ? element : <Navigate to="/signin" />;
+  };
+
   return (
-    <Router>
-      <div className="App">
-        <h1>Farm Game Dashboard</h1>
-        <nav>
-          <a href="/">Farm Overview</a> | 
-          <a href="/crops">Crops</a> | 
-          <a href="/businesses">Businesses</a>
-        </nav>
+    <ApiContext.Provider value={{ apiUrl }}>
+      <Router>
+        <Navbar />
         <Routes>
-          <Route path="/" element={<FarmOverview />} />
-          <Route path="/crops" element={<CropDetails />} />
-          <Route path="/businesses" element={<BusinessList />} />
-        </Routes>
-      </div>
-    </Router>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="/register" element={<Registration />} />
+          <Route path="/auth-success" element={<AuthSuccess />} />
+          <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard />} />} />
+        </Routes> 
+      </Router>
+    </ApiContext.Provider>
   );
 }
 

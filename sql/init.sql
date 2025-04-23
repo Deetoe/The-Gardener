@@ -1,19 +1,22 @@
 CREATE TABLE users (
   id SERIAL PRIMARY KEY,
   discord_id TEXT UNIQUE NOT NULL,
+  farm_name TEXT,
   coins INTEGER DEFAULT 0,
-  planted_crop TEXT,
-  crop_start_time TIMESTAMP,
-  crops_collected JSONB DEFAULT '[]',
-  businesses JSONB DEFAULT '[]'
+  auth_token TEXT,
+  token_expires_at TIMESTAMP,
+  last_business_collection TIMESTAMP
 );
 
-CREATE TABLE crops (
+CREATE TABLE plots (
   id SERIAL PRIMARY KEY,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  crop_type TEXT NOT NULL,
+  plot_type TEXT,
   planted_at TIMESTAMP,
-  harvest_time TIMESTAMP
+  harvest_time TIMESTAMP,
+  capacity INTEGER DEFAULT 1,
+  level INTEGER DEFAULT 1,
+  current_crops INTEGER DEFAULT 0
 );
 
 CREATE TABLE businesses (

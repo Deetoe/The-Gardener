@@ -1,11 +1,13 @@
-// bot/db.js
+// Database utility for bot commands
 const { Pool } = require('pg');
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 
-// Set up the PostgreSQL connection pool (same connection settings as server)
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL, // The connection string from .env
+  connectionString: process.env.DATABASE_URL,
 });
 
-// Export the pool for use in the bot commands
-module.exports = pool;
+// Export the query method directly
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  connect: () => pool.connect(),
+};

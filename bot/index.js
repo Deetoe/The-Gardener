@@ -1,13 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
 const token = process.env.DISCORD_TOKEN;
+const db = require('./utils/db');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+// Initialize collections
 client.cooldowns = new Collection();
 client.commands = new Collection();
+
+// Load command files
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
 
@@ -25,52 +29,20 @@ for (const folder of commandFolders) {
 	}
 }
 
-client.once(Events.ClientReady, readyClient => {
-	console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-});
+// Load event files
+const eventsPath = path.join(__dirname, 'events');
+const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
-client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
-	const command = client.commands.get(interaction.commandName);
-
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
+for (const file of eventFiles) {
+	const filePath = path.join(eventsPath, file);
+	const event = require(filePath);
+	if (event.once) {
+		client.once(event.name, (...args) => event.execute(...args));
+	} else {
+		client.on(event.name, (...args) => event.execute(...args));
 	}
+	console.log(`Loaded event: ${event.name} from ${file}`);
+}
 
-	const { cooldowns } = interaction.client;
-
-	if (!cooldowns.has(command.data.name)) {
-		cooldowns.set(command.data.name, new Collection());
-	}
-
-	const now = Date.now();
-	const timestamps = cooldowns.get(command.data.name);
-	const defaultCooldownDuration = 3;
-	const cooldownAmount = (command.cooldown ?? defaultCooldownDuration) * 1000;
-
-	if (timestamps.has(interaction.user.id)) {
-		const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
-
-		if (now < expirationTime) {
-			const expiredTimestamp = Math.round(expirationTime / 1000);
-			return interaction.reply({ content: `Please wait, you are on a cooldown for \`${command.data.name}\`. You can use it again <t:${expiredTimestamp}:R>.`, flags: MessageFlags.Ephemeral });
-		}
-	}
-
-	timestamps.set(interaction.user.id, now);
-	setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
-
-	try {
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (interaction.replied || interaction.deferred) {
-			await interaction.followUp({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
-		} else {
-			await interaction.reply({ content: 'There was an error while executing this command!', flags: MessageFlags.Ephemeral });
-		}
-	}
-});
-
+// Login to Discord
 client.login(token);

@@ -1,41 +1,86 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder, StringSelectMenuBuilder, ActionRowBuilder, MessageFlags } = require('discord.js');
 const db = require('../../utils/db');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('plant')
-    .setDescription('Plant a crop on your farm!')
-    .addStringOption(option =>
-      option.setName('crop')
-        .setDescription('The crop you want to plant')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Wheat', value: 'wheat' },
-          { name: 'Carrot', value: 'carrot' },
-          { name: 'Corn', value: 'corn' }
-        )),
+    .setDescription('Plant crops on your specialized plots!'),
+
   async execute(interaction) {
-    const crop = interaction.options.getString('crop');
-    const discordId = interaction.user.id;
+    try {
+      const discordId = interaction.user.id;
+      
+      // Get user data
+      const { rows: userRows } = await db.query('SELECT * FROM users WHERE discord_id = $1', [discordId]);
+      
+      if (userRows.length === 0) {
+        return interaction.reply({ 
+          content: 'You need to start a farm first using `/startfarm`!',
+          flags: MessageFlags.Ephemeral
+        });
+      }
 
-    // Get user data
-    const { rows } = await db.query('SELECT * FROM users WHERE discord_id = $1', [discordId]);
+      const user = userRows[0];
+      
+      // Get all user's plots that are not empty type and have available capacity
+      const { rows: plotRows } = await db.query(
+        'SELECT * FROM plots WHERE user_id = $1 AND plot_type != $2 AND current_crops < capacity',
+        [user.id, 'empty']
+      );
+      
+      if (plotRows.length === 0) {
+        return interaction.reply({ 
+          content: 'You don\'t have any plots with available capacity. Use `/manageplots` to buy or upgrade plots!',
+          flags: MessageFlags.Ephemeral
+        });
+      }
 
-    if (rows.length === 0) {
-      await db.query('INSERT INTO users (discord_id, coins) VALUES ($1, $2)', [discordId, 0]);
-      return interaction.reply('Welcome to your farm! You can now plant crops!');
+      // Create options for plot selection menu
+      const plotOptions = plotRows.map(plot => {
+        const emoji = getCropEmoji(plot.plot_type);
+        const capacityText = plot.current_crops < plot.capacity 
+          ? `${plot.current_crops}/${plot.capacity} planted` 
+          : `FULL`;
+        
+        return {
+          label: `${plot.plot_type.charAt(0).toUpperCase() + plot.plot_type.slice(1)} Plot #${plot.id}`,
+          value: plot.id.toString(),
+          emoji: emoji,
+          description: `Level ${plot.level}, ${capacityText}`
+        };
+      });
+      
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('select_plot_to_plant')
+          .setPlaceholder('Select a plot to plant crops')
+          .addOptions(plotOptions)
+      );
+      
+      // Send the selection menu to the user
+      await interaction.reply({
+        content: '🌱 Which plot would you like to plant crops in?',
+        components: [row],
+        flags: MessageFlags.Ephemeral
+      });
+      
+    } catch (error) {
+      console.error('Error in plant command:', error);
+      return interaction.reply({ 
+        content: 'There was an error while trying to plant your crop. Please try again later.',
+        flags: MessageFlags.Ephemeral
+      });
     }
-
-    // Check if user already has a planted crop
-    const user = rows[0];
-    if (user.planted_crop) {
-      return interaction.reply(`You already have a crop planted: ${user.planted_crop}. Wait for it to grow or collect it!`);
-    }
-
-    // Plant the crop and record the time it was planted
-    const currentTime = new Date();
-    await db.query('UPDATE users SET planted_crop = $1, crop_start_time = $2 WHERE discord_id = $3', [crop, currentTime, discordId]);
-
-    interaction.reply(`You have planted ${crop}! It will be ready to harvest soon.`);
   },
 };
+
+// Helper function to get emoji for crop type
+function getCropEmoji(cropType) {
+  const emojis = {
+    'wheat': '🌾',
+    'corn': '🌽',
+    'carrot': '🥕',
+    'empty': '🟫'
+  };
+  return emojis[cropType] || '🌱';
+}
